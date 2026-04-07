@@ -25,6 +25,50 @@ public class IngestedChunk
     [JsonPropertyName("context")]
     public string? Context { get; set; }
 
+    // Entity metadata (populated by EntityExtractionProcessor)
+    [VectorStoreData(StorageName = "entities_people")]
+    [JsonPropertyName("entities_people")]
+    public string? EntitiesPeople { get; set; }
+
+    [VectorStoreData(StorageName = "entities_organizations")]
+    [JsonPropertyName("entities_organizations")]
+    public string? EntitiesOrganizations { get; set; }
+
+    [VectorStoreData(StorageName = "entities_technologies")]
+    [JsonPropertyName("entities_technologies")]
+    public string? EntitiesTechnologies { get; set; }
+
+    [VectorStoreData(StorageName = "entities_versions")]
+    [JsonPropertyName("entities_versions")]
+    public string? EntitiesVersions { get; set; }
+
+    // Topic metadata (populated by TopicClassificationProcessor)
+    [VectorStoreData(StorageName = "topic_primary")]
+    [JsonPropertyName("topic_primary")]
+    public string? TopicPrimary { get; set; }
+
+    [VectorStoreData(StorageName = "topic_secondary")]
+    [JsonPropertyName("topic_secondary")]
+    public string? TopicSecondary { get; set; }
+
+    // Tree index metadata (populated by TreeIndexWriter)
+    [VectorStoreData(StorageName = "level")]
+    [JsonPropertyName("level")]
+    public int Level { get; set; } = 0; // 0=leaf, 1=branch, 2=root
+
+    [VectorStoreData(StorageName = "parent_id")]
+    [JsonPropertyName("parent_id")]
+    public string? ParentId { get; set; }
+
+    // Hypothetical query metadata (populated by HypotheticalQueryProcessor)
+    [VectorStoreData(StorageName = "chunk_type")]
+    [JsonPropertyName("chunk_type")]
+    public string? ChunkType { get; set; }
+
+    [VectorStoreData(StorageName = "parent_chunk_id")]
+    [JsonPropertyName("parent_chunk_id")]
+    public string? ParentChunkId { get; set; }
+
     [VectorStoreVector(VectorDimensions, DistanceFunction = VectorDistanceFunction, StorageName = "embedding")]
     [JsonPropertyName("embedding")]
     public string? Vector => Text;

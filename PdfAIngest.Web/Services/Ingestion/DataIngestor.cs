@@ -3,6 +3,7 @@ using Microsoft.Extensions.DataIngestion;
 using Microsoft.Extensions.DataIngestion.Chunkers;
 using Microsoft.Extensions.VectorData;
 using Microsoft.ML.Tokenizers;
+using MEDIExtensions.Ingestion;
 using UglyToad.PdfPig.DataIngestion.Processors;
 
 namespace PdfAIngest.Web.Services.Ingestion;
@@ -10,6 +11,7 @@ namespace PdfAIngest.Web.Services.Ingestion;
 public class DataIngestor(
     ILogger<DataIngestor> logger,
     ILoggerFactory loggerFactory,
+    IConfiguration configuration,
     VectorStore vectorStore,
     IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator,
     IChatClient chatClient)
@@ -39,6 +41,22 @@ public class DataIngestor(
                 new ContextualChunkEnricher(chatClient)
             }
         };
+
+        // Add configurable enrichment processors from appsettings.json
+        var ingestionConfig = configuration.GetSection("Ingestion");
+
+        if (ingestionConfig.GetValue<bool>("EnableEntityExtraction"))
+            pipeline.ChunkProcessors.Add(new EntityExtractionProcessor(chatClient));
+
+        if (ingestionConfig.GetValue<bool>("EnableTopicClassification"))
+        {
+            var taxonomy = ingestionConfig.GetSection("TopicTaxonomy").Get<string[]>()
+                ?? ["web", "data", "performance", "security", "architecture"];
+            pipeline.ChunkProcessors.Add(new TopicClassificationProcessor(chatClient, taxonomy));
+        }
+
+        if (ingestionConfig.GetValue<bool>("EnableHypotheticalQueries"))
+            pipeline.ChunkProcessors.Add(new HypotheticalQueryProcessor(chatClient));
 
         await foreach (var result in pipeline.ProcessAsync(directory, searchPattern))
         {
