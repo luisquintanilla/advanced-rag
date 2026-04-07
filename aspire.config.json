@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "PdfAIngest.AppHost/PdfAIngest.AppHost.csproj"
+  }
+}
