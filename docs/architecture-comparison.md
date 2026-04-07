@@ -172,7 +172,7 @@ Why the trade-offs are worth it: **scanned documents are the majority of enterpr
 Set user secrets for the AppHost project:
 
 ```bash
-cd PdfAIngest.AppHost
+cd AdvancedRag.AppHost
 dotnet user-secrets set "Azure:SubscriptionId" "<your-subscription-id>"
 dotnet user-secrets set "Azure:Location" "<your-location>"
 dotnet user-secrets set "AzureOpenAI:Name" "<your-azure-openai-resource-name>"
@@ -182,7 +182,7 @@ dotnet user-secrets set "AzureOpenAI:ResourceGroup" "<your-resource-group>"
 ### Run
 
 ```bash
-dotnet run --project PdfAIngest.AppHost
+dotnet run --project AdvancedRag.AppHost
 ```
 
 ### Validate the Pipeline

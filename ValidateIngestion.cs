@@ -17,7 +17,7 @@ using UglyToad.PdfPig.DataIngestion;
 using UglyToad.PdfPig.DataIngestion.Processors;
 
 // ─── Configuration ──────────────────────────────────────────────────────────
-var pdfPath = Path.Combine("PdfAIngest.Web", "wwwroot", "Data", "Example_Emergency_Survival_Kit.pdf");
+var pdfPath = Path.Combine("AdvancedRag.Web", "wwwroot", "Data", "Example_Emergency_Survival_Kit.pdf");
 var outputDir = Path.Combine("validation-output");
 var chatDeployment = "chat";
 var embeddingDeployment = "embedding";
@@ -25,7 +25,7 @@ var embeddingDeployment = "embedding";
 Directory.CreateDirectory(outputDir);
 
 Console.WriteLine("╔══════════════════════════════════════════════════════════╗");
-Console.WriteLine("║       PdfAIngest — Ingestion Pipeline Validator         ║");
+Console.WriteLine("║       AdvancedRag — Ingestion Pipeline Validator         ║");
 Console.WriteLine("╚══════════════════════════════════════════════════════════╝");
 Console.WriteLine();
 
@@ -37,7 +37,7 @@ try
     if (!File.Exists(pdfPath))
     {
         Console.WriteLine($"  ✗ PDF not found: {pdfPath}");
-        Console.WriteLine("    Run from C:\\Dev\\PdfAIngest\\ directory.");
+        Console.WriteLine("    Run from C:\\Dev\\AdvancedRag\\ directory.");
         return 1;
     }
 

@@ -1,8 +1,8 @@
-﻿using PdfAIngest.Web.Services.Ingestion;
+using AdvancedRag.Web.Services.Ingestion;
 using MEDIExtensions.Retrieval;
 using Microsoft.Extensions.VectorData;
 
-namespace PdfAIngest.Web.Services;
+namespace AdvancedRag.Web.Services;
 
 public class SemanticSearch(
     VectorStoreCollection<Guid, IngestedChunk> vectorCollection,

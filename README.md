@@ -41,7 +41,7 @@ Note: Qdrant and Docker are excellent open source products, but are not maintain
 
 1. Open the project folder in Visual Studio Code.
 2. Install the [C# Dev Kit extension](https://marketplace.visualstudio.com/items?itemName=ms-dotnettools.csdevkit) for Visual Studio Code.
-3. Once installed, Open the `Program.cs` file in the PdfAIngest.AppHost project.
+3. Once installed, Open the `Program.cs` file in the AdvancedRag.AppHost project.
 4. Run the project by clicking the "Run" button in the Debug view.
 
 ## Trust the localhost certificate
@@ -52,7 +52,7 @@ See [Troubleshoot untrusted localhost certificate in Aspire](https://learn.micro
 
 # Updating JavaScript dependencies
 
-This template leverages JavaScript libraries to provide essential functionality. These libraries are located in the wwwroot/lib folder of the PdfAIngest.Web project. For instructions on updating each dependency, please refer to the README.md file in each respective folder.
+This template leverages JavaScript libraries to provide essential functionality. These libraries are located in the wwwroot/lib folder of the AdvancedRag.Web project. For instructions on updating each dependency, please refer to the README.md file in each respective folder.
 
 # Learn More
 To learn more about development with .NET and AI, check out the following links:

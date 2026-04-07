@@ -22,7 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\PdfAIngest.ServiceDefaults\PdfAIngest.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\AdvancedRag.ServiceDefaults\AdvancedRag.ServiceDefaults.csproj" />
     <ProjectReference Include="..\..\MEDIExtensions\src\MEDIExtensions\MEDIExtensions.csproj" />
   </ItemGroup>
 

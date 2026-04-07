@@ -17,7 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\PdfAIngest.Web\PdfAIngest.Web.csproj" />
+    <ProjectReference Include="..\AdvancedRag.Web\AdvancedRag.Web.csproj" />
   </ItemGroup>
 
 </Project>

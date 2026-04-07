@@ -1,5 +1,5 @@
 {
   "appHost": {
-    "path": "PdfAIngest.AppHost/PdfAIngest.AppHost.csproj"
+    "path": "AdvancedRag.AppHost/AdvancedRag.AppHost.csproj"
   }
 }

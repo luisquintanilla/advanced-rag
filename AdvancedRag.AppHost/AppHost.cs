@@ -22,7 +22,7 @@ var vectorDB = builder.AddQdrant("vectordb")
     .WithDataVolume()
     .WithLifetime(ContainerLifetime.Persistent);
 
-var webApp = builder.AddProject<Projects.PdfAIngest_Web>("aichatweb-app");
+var webApp = builder.AddProject<Projects.AdvancedRag_Web>("aichatweb-app");
 webApp
     .WithReference(openai)
     .WaitFor(openai);

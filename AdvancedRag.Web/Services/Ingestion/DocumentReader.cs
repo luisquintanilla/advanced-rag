@@ -1,7 +1,7 @@
 using Microsoft.Extensions.DataIngestion;
 using UglyToad.PdfPig.DataIngestion;
 
-namespace PdfAIngest.Web.Services.Ingestion;
+namespace AdvancedRag.Web.Services.Ingestion;
 
 internal sealed class DocumentReader(DirectoryInfo rootDirectory) : IngestionDocumentReader
 {

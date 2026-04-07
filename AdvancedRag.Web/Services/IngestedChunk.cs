@@ -1,13 +1,13 @@
-﻿using System.Text.Json.Serialization;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.VectorData;
 
-namespace PdfAIngest.Web.Services;
+namespace AdvancedRag.Web.Services;
 
 public class IngestedChunk
 {
     public const int VectorDimensions = 1536; // 1536 is the default vector size for the text-embedding-3-small embedding model
     public const string VectorDistanceFunction = DistanceFunction.CosineSimilarity;
-    public const string CollectionName = "data-pdfaingest-chunks";
+    public const string CollectionName = "data-AdvancedRag-chunks";
 
     [VectorStoreKey(StorageName = "key")]
     [JsonPropertyName("key")]

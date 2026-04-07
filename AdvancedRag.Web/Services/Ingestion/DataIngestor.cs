@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.AI;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DataIngestion;
 using Microsoft.Extensions.DataIngestion.Chunkers;
 using Microsoft.Extensions.VectorData;
@@ -6,7 +6,7 @@ using Microsoft.ML.Tokenizers;
 using MEDIExtensions.Ingestion;
 using UglyToad.PdfPig.DataIngestion.Processors;
 
-namespace PdfAIngest.Web.Services.Ingestion;
+namespace AdvancedRag.Web.Services.Ingestion;
 
 public class DataIngestor(
     ILogger<DataIngestor> logger,

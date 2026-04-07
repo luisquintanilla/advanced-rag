@@ -3,11 +3,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{82EA535E-0E00-410A-AC9D-82DBAAB6327A}") = "PdfAIngest.AppHost", "PdfAIngest.AppHost\PdfAIngest.AppHost.csproj", "{90BED114-84BA-46E9-B156-11881306F208}"
+Project("{82EA535E-0E00-410A-AC9D-82DBAAB6327A}") = "AdvancedRag.AppHost", "AdvancedRag.AppHost\AdvancedRag.AppHost.csproj", "{90BED114-84BA-46E9-B156-11881306F208}"
 EndProject
-Project("{82EA535E-0E00-410A-AC9D-82DBAAB6327A}") = "PdfAIngest.ServiceDefaults", "PdfAIngest.ServiceDefaults\PdfAIngest.ServiceDefaults.csproj", "{F034CF6E-94CF-4BB2-8701-73DD29140CA6}"
+Project("{82EA535E-0E00-410A-AC9D-82DBAAB6327A}") = "AdvancedRag.ServiceDefaults", "AdvancedRag.ServiceDefaults\AdvancedRag.ServiceDefaults.csproj", "{F034CF6E-94CF-4BB2-8701-73DD29140CA6}"
 EndProject
-Project("{82EA535E-0E00-410A-AC9D-82DBAAB6327A}") = "PdfAIngest.Web", "PdfAIngest.Web\PdfAIngest.Web.csproj", "{739D594B-F1A9-496C-A4AD-97E9706201D4}"
+Project("{82EA535E-0E00-410A-AC9D-82DBAAB6327A}") = "AdvancedRag.Web", "AdvancedRag.Web\AdvancedRag.Web.csproj", "{739D594B-F1A9-496C-A4AD-97E9706201D4}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

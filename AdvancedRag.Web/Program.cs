@@ -1,8 +1,8 @@
 using Microsoft.Extensions.AI;
 using MEDIExtensions.Retrieval;
-using PdfAIngest.Web.Components;
-using PdfAIngest.Web.Services;
-using PdfAIngest.Web.Services.Ingestion;
+using AdvancedRag.Web.Components;
+using AdvancedRag.Web.Services;
+using AdvancedRag.Web.Services.Ingestion;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
