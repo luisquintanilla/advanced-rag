@@ -58,6 +58,9 @@ public class DataIngestor(
         if (ingestionConfig.GetValue<bool>("EnableHypotheticalQueries"))
             pipeline.ChunkProcessors.Add(new HypotheticalQueryProcessor(chatClient));
 
+        if (ingestionConfig.GetValue<bool>("EnableTreeIndex"))
+            pipeline.ChunkProcessors.Add(new TreeIndexProcessor(chatClient));
+
         await foreach (var result in pipeline.ProcessAsync(directory, searchPattern))
         {
             logger.LogInformation("Completed processing '{id}'. Succeeded: '{succeeded}'.", result.DocumentId, result.Succeeded);

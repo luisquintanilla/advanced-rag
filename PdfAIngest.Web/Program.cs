@@ -30,12 +30,25 @@ builder.Services.AddSingleton(sp =>
     var chatClient = sp.GetRequiredService<IChatClient>();
     var pipeline = new RetrievalPipeline(loggerFactory: loggerFactory);
 
-    // Pre-query processor (pick one)
-    var queryStrategy = config["QueryStrategy"] ?? "None";
-    if (queryStrategy == "QueryExpansion")
-        pipeline.QueryProcessors.Add(new MultiQueryExpander(chatClient));
-    else if (queryStrategy == "HyDE")
-        pipeline.QueryProcessors.Add(new HydeQueryTransformer(chatClient));
+    // Search paradigm: Adaptive router overrides other pre-query processors
+    var searchParadigm = config["SearchParadigm"] ?? "Vector";
+    if (searchParadigm == "Adaptive")
+    {
+        pipeline.QueryProcessors.Add(new AdaptiveRouter(chatClient));
+    }
+    else if (searchParadigm == "TreeTraversal")
+    {
+        pipeline.QueryProcessors.Add(new TreeSearchRetriever());
+    }
+    else
+    {
+        // Pre-query processor (pick one) — only for Vector paradigm
+        var queryStrategy = config["QueryStrategy"] ?? "None";
+        if (queryStrategy == "QueryExpansion")
+            pipeline.QueryProcessors.Add(new MultiQueryExpander(chatClient));
+        else if (queryStrategy == "HyDE")
+            pipeline.QueryProcessors.Add(new HydeQueryTransformer(chatClient));
+    }
 
     // Post-search: Reranker
     var reranker = config["Reranker"] ?? "None";
@@ -48,6 +61,27 @@ builder.Services.AddSingleton(sp =>
 
     return pipeline;
 });
+
+// Register generation mode orchestrators (Self-RAG, Speculative RAG)
+var generationMode = builder.Configuration["Retrieval:GenerationMode"] ?? "Standard";
+if (generationMode == "SelfRag")
+{
+    builder.Services.AddSingleton(sp =>
+        new SelfRagOrchestrator(sp.GetRequiredService<IChatClient>(), sp.GetService<ILoggerFactory>()));
+}
+else if (generationMode == "SpeculativeRag")
+{
+    // Speculative RAG needs two models: drafter (small/fast) and verifier (large/accurate)
+    // Register a second "drafter" chat client — configure the model name in appsettings
+    openai.AddKeyedChatClient("drafter", builder.Configuration["Retrieval:DrafterModel"] ?? "chat");
+
+    builder.Services.AddSingleton(sp =>
+    {
+        var drafter = sp.GetRequiredKeyedService<IChatClient>("drafter");
+        var verifier = sp.GetRequiredService<IChatClient>();
+        return new SpeculativeRagOrchestrator(drafter, verifier, sp.GetService<ILoggerFactory>());
+    });
+}
 
 var app = builder.Build();
 
