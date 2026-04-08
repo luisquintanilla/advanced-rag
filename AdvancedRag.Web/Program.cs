@@ -20,17 +20,10 @@ openai.AddEmbeddingGenerator("embedding");
 builder.AddQdrantClient("vectordb");
 builder.Services.AddQdrantVectorStore();
 builder.Services.AddQdrantCollection<Guid, IngestedChunk>(IngestedChunk.CollectionName);
-builder.Services.AddSingleton<DataIngestor>();
-builder.Services.AddSingleton<SemanticSearch>();
-builder.Services.AddKeyedSingleton("ingestion_directory", new DirectoryInfo(Path.Combine(builder.Environment.WebRootPath, "Data")));
-
-// Retrieval pipeline — compose query and result processors
-builder.Services.AddRetrievalPipeline()
-    .UseQueryExpansion()
-    .UseLlmReranking()
-    .UseCrag();
 
 // Ingestion pipeline — compose document and chunk processors
+builder.Services.AddKeyedSingleton("ingestion_directory", new DirectoryInfo(Path.Combine(builder.Environment.WebRootPath, "Data")));
+builder.Services.AddSingleton<DataIngestor>();
 builder.Services.AddIngestionPipeline()
     .UseDocumentProcessor<VisionOcrEnricher>()
     .UseDocumentProcessor<VisionTableEnricher>()
@@ -39,6 +32,15 @@ builder.Services.AddIngestionPipeline()
     .UseTopicClassification(o => o.Taxonomy = ["web", "data", "performance", "security", "architecture", "testing", "cloud", "ai"])
     .UseHypotheticalQueries()
     .UseTreeIndex();
+
+// Retrieval pipeline — compose query and result processors
+builder.Services.AddRetrievalPipeline()
+    .UseQueryExpansion()
+    .UseLlmReranking()
+    .UseCrag();
+
+// SemanticSearch depends on both DataIngestor and RetrievalPipeline
+builder.Services.AddSingleton<SemanticSearch>();
 
 // Generation orchestrators (standalone, registered directly)
 builder.Services.AddSingleton(sp =>
