@@ -264,11 +264,14 @@ dotnet run ValidateIngestion.cs
 dotnet run ValidateRetrieval.cs
 ```
 
+## What's Available Now
+
+- **Cross-encoder reranking**: ONNX-based local reranking (no LLM round-trip) via [MEDIExtensions.Onnx](https://github.com/luisquintanilla/MEDIExtensions) — supports ms-marco-MiniLM, BGE, and custom models with GPU/CPU fallback
+
 ## What's Next
 
 - **Benchmarking**: Systematic A/B comparison of retrieval accuracy across configurations using the MEAI Evaluation framework
 - **Streaming generation**: Self-RAG with streaming output and in-band quality signals
-- **Cross-encoder reranking**: ONNX-based local reranking (no LLM round-trip) via MEDIExtensions.Onnx
 - **Hybrid search**: Combine vector similarity with BM25 keyword search for better recall on specific terms
 - **Adaptive pipeline selection**: Runtime profiling to auto-select the optimal processor combination per query
 - **Package publication**: When the upstream fork abstractions merge and MEDIExtensions ships to NuGet, the `local-packages` workaround goes away
