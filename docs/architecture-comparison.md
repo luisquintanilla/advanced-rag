@@ -1,161 +1,228 @@
-# Vision-AI Document Processing with PdfPig: A New Direction for .NET RAG Applications
+# Beyond Search: Composable RAG Pipelines for .NET Applications
 
-## The Problem: Why Standard PDF Extraction Falls Short
+## The Problem: Why "Embed and Search" Isn't Enough
 
-Most enterprise documents live in PDF — and most of those PDFs are *messy*. Scanned contracts, forms with handwritten notes, technical manuals with complex table layouts, reports with watermarks and multi-column text. These are the documents that matter most to a RAG application, and they're exactly the ones that break traditional text extraction.
+The standard [`AIChatWeb-CSharp` template](https://github.com/dotnet/extensions/tree/main/src/ProjectTemplates/Microsoft.Extensions.AI.Templates/templates/AIChatWeb-CSharp) from `dotnet/extensions` gives you a working RAG chat application. Documents go in, they get chunked and embedded, and when a user asks a question, the system finds the nearest vectors and passes them to the LLM.
 
-The standard [`AIChatWeb-CSharp` template](https://github.com/dotnet/extensions/tree/main/src/ProjectTemplates/Microsoft.Extensions.AI.Templates/templates/AIChatWeb-CSharp) from `dotnet/extensions` provides two options for PDF processing:
+This works — for easy questions against clean documents. But the moment your corpus grows, your questions get nuanced, or your documents contain mixed-quality content, the cracks appear:
 
-- **With Aspire**: A [MarkItDown](https://github.com/microsoft/markitdown) MCP server running in Docker, which converts PDFs to text via a server-side HTTP call.
-- **Without Aspire**: A basic `PdfPigReader` that uses native PDF text extraction.
+- **One query, one interpretation.** The user asks "How do I handle auth?" — but the system only searches that exact phrasing. It misses chunks about "authentication middleware," "JWT configuration," or "identity providers."
+- **No quality signal.** The top-5 nearest vectors might include chunks that are *semantically similar but factually irrelevant.* The system has no way to know.
+- **Flat chunks, flat search.** A 200-page technical manual is sliced into token-counted chunks with no awareness of hierarchy, entities, or topics. A question about the "architecture overview" returns the same type of chunks as one about a specific API parameter.
+- **Generate and pray.** The LLM gets context and generates an answer. If the context was bad, the answer is bad. There's no self-correction loop.
 
-Both work well for *digitally-authored PDFs* — documents where text was typed, not scanned. But for the documents that organizations actually need to process — scanned invoices, legacy archives, forms filled out by hand — the result is often empty text, garbled layouts, or missing tables. Garbage in, garbage out.
+These aren't edge cases — they're the *normal* experience for enterprise RAG applications. The template gives you the foundation. This project shows what you build on top of it.
 
-## The Vision: Let the LLM See the Document
+## The Innovation: Pipelines, Not Point Solutions
 
-What if, instead of trying to reconstruct text from a PDF's internal structures, we simply **rendered the page as an image and let a vision-capable LLM read it** — the same way a human would?
-
-This is the core insight behind PdfPig's `VisionOnly` reading mode. Every page is rendered as a PNG image. Every image is sent to a vision LLM for OCR. The model sees the page *as it was intended to be seen* — headers, tables, footnotes, watermarks, handwriting — and extracts text with layout awareness that no rule-based parser can match.
-
-PdfPig supports a spectrum of reading modes:
-
-| Mode | How It Works | Best For |
-|------|-------------|----------|
-| **TextOnly** | Native PDF text extraction | Clean, digitally-authored PDFs |
-| **Hybrid** | Native text + page images for scanned pages | Mixed documents |
-| **VisionOnly** | All pages rendered as images, no native extraction | Scanned docs, complex layouts, forms |
-
-`VisionOnly` is the most powerful — and the approach explored in this sample.
-
-## Architecture: How It All Fits Together
-
-The template's default pipeline is straightforward:
-
-```
-┌──────────┐     ┌──────────────┐     ┌───────────────┐     ┌──────────────┐
-│   PDF    │────▶│  MarkItDown  │────▶│ Basic Chunker │────▶│ Vector Store │
-│          │     │  MCP Server  │     │               │     │              │
-└──────────┘     └──────────────┘     └───────────────┘     └──────────────┘
-                   flat text              token-split           embeddings
-```
-
-The PdfPig-enhanced pipeline adds **vision-AI processing** at every stage:
-
-```
-┌──────────┐     ┌──────────────┐     ┌────────────────┐     ┌──────────────────┐
-│   PDF    │────▶│   PdfPig     │────▶│  Vision OCR    │────▶│  Vision Table    │
-│          │     │ (page images)│     │  Enricher      │     │  Enricher        │
-└──────────┘     └──────────────┘     └────────────────┘     └──────────────────┘
-                   PNG per page       LLM reads each page     LLM extracts tables
-                                            │                        │
-                                            ▼                        ▼
-┌──────────────┐     ┌───────────────────┐     ┌──────────────────────────┐
-│ Vector Store │◀────│   Contextual      │◀────│  Semantic Similarity     │
-│   (Qdrant)   │     │ Chunk Enricher    │     │  Chunker (embeddings)    │
-└──────────────┘     └───────────────────┘     └──────────────────────────┘
-  enriched chunks     LLM adds summaries       groups by meaning, not size
-```
-
-Each stage builds on the previous one:
-
-1. **PdfPigReader** renders every page as a PNG image — no text extraction attempted
-2. **VisionOcrEnricher** sends each page image to a vision LLM, replacing placeholders with OCR'd text
-3. **VisionTableEnricher** detects tables and extracts them as structured markdown
-4. **SemanticSimilarityChunker** groups content by semantic meaning using embeddings (not naive token splitting)
-5. **ContextualChunkEnricher** adds a one-sentence summary to each chunk, improving RAG retrieval
-6. **VectorStoreWriter** persists enriched, summarized chunks with their embeddings
-
-## The MEDI Framework: Composable Ingestion Pipelines
-
-What makes this approach elegant is that it's built on [`Microsoft.Extensions.DataIngestion`](https://learn.microsoft.com/dotnet/api/microsoft.extensions.dataingestion) (MEDI) — a composable pipeline framework where each stage is a pluggable component.
-
-The entire enhanced pipeline is configured in ~15 lines:
+Rather than fixing one problem at a time, this project introduces **composable pipelines** at every stage of the RAG loop — ingestion, retrieval, and generation — following the same pattern as [`Microsoft.Extensions.AI`](https://learn.microsoft.com/dotnet/ai/microsoft-extensions-ai):
 
 ```csharp
-using var pipeline = new IngestionPipeline<string>(
-    reader: new DocumentReader(directory),
-    chunker: new SemanticSimilarityChunker(embeddingGenerator,
-        new(TiktokenTokenizer.CreateForModel("gpt-4o"))),
-    writer: writer,
-    loggerFactory: loggerFactory)
-{
-    DocumentProcessors =
-    {
-        new VisionOcrEnricher(chatClient),
-        new VisionTableEnricher(chatClient)
-    },
-    ChunkProcessors =
-    {
-        new ContextualChunkEnricher(chatClient)
-    }
-};
+// The template gives you this:
+var results = await vectorCollection.SearchAsync(query, top: 5);
+
+// This project gives you this:
+builder.Services.AddRetrievalPipeline()
+    .UseQueryExpansion()          // 1 query → N variants, merged with RRF
+    .UseTreeSearch()              // navigate RAPTOR hierarchy
+    .UseLlmReranking()            // LLM scores each result for relevance
+    .UseCrag();                   // quality gate: accept, refine, or reject
+
+builder.Services.AddIngestionPipeline()
+    .UseDocumentProcessor<VisionOcrEnricher>()
+    .UseDocumentProcessor<VisionTableEnricher>()
+    .UseChunkProcessor<ContextualChunkEnricher>()
+    .UseEntityExtraction()        // tag: people, orgs, technologies
+    .UseTopicClassification()     // classify into taxonomy
+    .UseHypotheticalQueries()     // reverse-HyDE: "what question does this answer?"
+    .UseTreeIndex();              // RAPTOR: leaf → branch → root summaries
 ```
 
-This isn't a monolithic rewrite — it's **additive enhancement** on a standard framework. Want to skip table extraction? Remove one line. Want to add a custom processor for, say, redacting PII before chunking? Implement `IngestionDocumentProcessor` and add it to the list. The pipeline pattern makes experimentation cheap.
+Every `.UseX()` is optional. Every one has per-processor options (`o => o.MaxResults = 10`). The fluent chain reads top-to-bottom as the execution flow. This follows the same pattern as `AddChatClient().UseFunctionInvocation().UseOpenTelemetry()` — because if you know how to compose MEAI middleware, you already know how to compose RAG pipelines.
 
-## From Ollama to Azure OpenAI: Cloud-Ready AI
+## Architecture: Three Layers of Enhancement
 
-The template ships with Ollama — great for local development, but limited in vision capabilities. Vision-AI document processing requires models that can understand images, and that means stepping up to GPT-4o-class models.
+### Layer 1: Smarter Ingestion
 
-This sample uses Azure OpenAI with the [`RunAsExisting()`](https://learn.microsoft.com/dotnet/aspire/azureai/azureai-openai-integration) pattern — referencing a pre-provisioned Azure resource rather than managing lifecycle:
+The template chunks documents by token count and stores embeddings. This project adds four enrichment processors that run *during* ingestion, before anything hits the vector store:
 
+```
+┌───────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│  Chunked  │────▶│   Entity     │────▶│   Topic      │────▶│ Hypothetical │
+│  Content  │     │  Extraction  │     │Classification│     │   Queries    │
+└───────────┘     └──────────────┘     └──────────────┘     └──────────────┘
+                  people, orgs,          "security",          "What are the
+                  versions               "architecture"       auth options?"
+                        │                      │                     │
+                        ▼                      ▼                     ▼
+                  ┌──────────────────────────────────────────────────────┐
+                  │                   Tree Indexer                       │
+                  │  leaf chunks → branch summaries → root summary      │
+                  └──────────────────────────────────────────────────────┘
+                                         │
+                                         ▼
+                  ┌──────────────────────────────────────────────────────┐
+                  │              Vector Store (Qdrant)                   │
+                  │  enriched chunks + summaries at multiple levels      │
+                  └──────────────────────────────────────────────────────┘
+```
+
+| Processor | What It Does | Why It Matters |
+|-----------|-------------|----------------|
+| **Entity Extraction** | Tags chunks with people, organizations, technologies, and version numbers via LLM | Enables filtered search ("show me chunks about React") without keyword matching |
+| **Topic Classification** | Classifies each chunk into a configurable taxonomy (e.g., security, architecture, performance) | Faceted retrieval; chunks carry semantic categories, not just embeddings |
+| **Hypothetical Queries** | Generates 3 questions each chunk answers (reverse-HyDE) | Bridges the vocabulary gap: user queries match hypothetical queries better than raw content |
+| **Tree Index** | Creates RAPTOR-style hierarchical summaries: document-level (branch) and corpus-level (root) | A search for "system architecture" can match a root-level overview instead of only leaf fragments |
+
+These compose in order — entity extraction runs first, then topic classification, then hypothetical queries, and finally tree indexing. Tree indexing is last because it summarizes *enriched* chunks, capturing entities and topics in the summaries.
+
+### Layer 2: Smarter Retrieval
+
+The template does `collection.SearchAsync(query, top: 5)`. This project wraps that in a `RetrievalPipeline` with pre-search query processing and post-search result processing:
+
+```
+┌──────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│  User     │────▶│   Query      │────▶│    Tree      │────▶│   Vector     │
+│  Query    │     │  Expansion   │     │   Search     │     │   Search     │
+└──────────┘     └──────────────┘     └──────────────┘     └──────────────┘
+                  1 → 4 variants       level-aware           per-variant
+                  (original + 3)       grouping              RRF merge
+                        │                                         │
+                        └────────────────────┬────────────────────┘
+                                             ▼
+                  ┌──────────────┐     ┌──────────────┐
+                  │    LLM       │────▶│    CRAG      │────▶  Final Results
+                  │  Reranking   │     │ Quality Gate │
+                  └──────────────┘     └──────────────┘
+                  pointwise scoring    accept / refine /
+                  of each result       reject
+```
+
+**Query Processors** (pre-search — modify or expand the query):
+
+| Processor | What It Does | When to Use |
+|-----------|-------------|-------------|
+| **Query Expansion** | LLM generates 3 alternate phrasings. Each variant is searched independently; results are merged using Reciprocal Rank Fusion. | Default — significantly improves recall with minimal latency |
+| **HyDE** | LLM generates a *hypothetical perfect answer*, then searches for chunks similar to that answer instead of the original query. | Factual/technical queries where the answer structure is predictable |
+| **Tree Search** | Signals the pipeline to group results by tree level (root/branch/leaf) set by TreeIndexProcessor during ingestion. Returns leaf chunks prioritized, with branch and root summaries for context. | When documents are large and hierarchical; pairs with UseTreeIndex() |
+| **Adaptive Routing** | LLM classifies the query type and routes to the best search paradigm. | When your corpus has diverse query patterns (exploratory vs. specific) |
+
+**Result Processors** (post-search — filter, reorder, or validate results):
+
+| Processor | What It Does | When to Use |
+|-----------|-------------|-------------|
+| **LLM Reranking** | LLM scores each result for query relevance on a 1-10 scale. Results are reordered by LLM judgment, not just embedding distance. | When embedding similarity produces false positives (common for technical content) |
+| **CRAG** | Corrective Retrieval Augmented Generation — evaluates the top-N results and classifies confidence as Correct (use as-is), Ambiguous (refine), or Incorrect (reject and suggest web search). | When answer quality matters more than latency; prevents "confident but wrong" answers |
+
+### Layer 3: Smarter Generation
+
+The template passes retrieved context to the LLM and returns the response. This project adds generation orchestrators that add quality feedback loops:
+
+| Orchestrator | How It Works | Trade-off |
+|-------------|-------------|-----------|
+| **Self-RAG** | Generate → evaluate quality → if below threshold, retry with different context selection. Up to N retries. | 2-3x LLM calls, but catches low-quality generations before the user sees them |
+| **Speculative RAG** | A fast/cheap "drafter" model generates N candidate answers in parallel. A larger "verifier" model selects the best. Uses keyed DI for multi-model management. | Draft calls are cheap and parallel; verification adds one more call. Total latency is often *lower* than a single large-model call. |
+
+## The Composable Builder Pattern
+
+The APIs follow three design principles from `Microsoft.Extensions.AI`:
+
+**1. Fluent chaining** — each `.UseX()` returns the builder, enabling composition:
 ```csharp
-// AppHost.cs — reference existing Azure OpenAI resource
-var openai = builder.AddAzureOpenAI("openai")
-    .RunAsExisting(azOpenAiName, azOpenAiRg);
-
-openai.AddDeployment("chat", "gpt-5.1", "2025-11-13");
-openai.AddDeployment("embedding", "text-embedding-3-small", "1");
+builder.Services.AddRetrievalPipeline()
+    .UseQueryExpansion(o => o.VariantCount = 5)
+    .UseLlmReranking(o => o.MaxResults = 10)
+    .UseCrag(o => o.EvaluateTopN = 5);
 ```
 
+**2. Named convenience + generic extensibility** — built-in processors have discoverable methods with typed options; third-party processors use generics:
 ```csharp
-// Program.cs — Aspire-managed client registration
-var openai = builder.AddAzureOpenAIClient("openai");
-openai.AddChatClient("chat")
-    .UseFunctionInvocation()
-    .UseOpenTelemetry()
-    .UseLogging();
-openai.AddEmbeddingGenerator("embedding");
+// Built-in (discoverable, typed options)
+.UseLlmReranking(o => o.MaxCandidates = 8)
+
+// Third-party (extensible, ActivatorUtilities-resolved)
+.UseResultProcessor<MyCustomReranker>()
 ```
 
-Because everything flows through `Microsoft.Extensions.AI` abstractions (`IChatClient`, `IEmbeddingGenerator`), swapping Azure OpenAI for another vision-capable provider is a configuration change, not a code rewrite. The PdfPig processors don't know or care which model is behind the `IChatClient` — they just need one that can see images.
+**3. Registration order = execution order** — processors chain sequentially. The fluent chain reads top-to-bottom as the pipeline executes:
+```csharp
+.UseEntityExtraction()        // runs first: tags chunks
+.UseTopicClassification()     // runs second: classifies tagged chunks
+.UseTreeIndex()               // runs last: summarizes enriched chunks
+```
 
-## Results: What Changes for RAG Quality
+## RAPTOR: End-to-End Hierarchical RAG
 
-We built a [C# file-based validation app](../ValidateIngestion.cs) (.NET 10) to test each pipeline stage in isolation against a 12-page sample PDF. The results tell the story:
+One of the most powerful patterns demonstrated here is the full [RAPTOR](https://arxiv.org/abs/2401.18059) loop — hierarchical indexing during ingestion paired with level-aware retrieval:
 
-### Before the Fix (VisionOcrEnricher setting only `element.Text`)
+**During ingestion** (`UseTreeIndex()`):
+- Leaf chunks (level 0) are the original content
+- Branch summaries (level 1) are LLM-generated document-level overviews
+- Root summary (level 2) is an LLM-generated corpus-level overview
+- All levels are stored in the same vector collection with `Level` metadata
 
-| Metric | Value |
-|--------|-------|
-| Chunks produced | **2** |
-| Chunk content | `[scanned-page]` (placeholder text!) |
-| Contextual summaries | *"The scanned page appears to contain text that is unreadable"* |
+**During retrieval** (`UseTreeSearch()`):
+- The pipeline searches with a wider net (`topK × 3`)
+- Results are grouped by `Level` metadata
+- Leaf chunks are prioritized as primary results
+- Branch and root summaries provide contextual scaffolding
+- The LLM gets both specific detail AND high-level context
 
-The chunker was seeing placeholder text instead of OCR content — a subtle bug where the MEDI framework's `GetMarkdown()` method reads the element's constructor parameter (`_markdown`), while the enricher was only setting the `Text` property.
+This means a query like *"What is the overall architecture?"* can match a root-level summary directly, while *"How do I configure JWT?"* matches specific leaf chunks — both from the same search call.
 
-### After the Fix (VisionOcrEnricher replacing the element)
+## From Template to Advanced RAG: What Changed
 
-| Metric | Value |
-|--------|-------|
-| Chunks produced | **6** (semantically grouped from 12 pages) |
-| Chunk content | Real OCR text (174–5,923 chars per page) |
-| Contextual summaries | *"A comprehensive guide to the Life Guard X Emergency Survival Kit, detailing its contents..."* |
+| Aspect | Template | Advanced RAG |
+|--------|----------|-------------|
+| **Ingestion** | Token chunker → embed → store | Semantic chunker + 4 enrichment processors + tree indexing → embed → store |
+| **Retrieval** | `collection.SearchAsync(query, top: 5)` | Query expansion + tree search → vector search with RRF → LLM reranking + CRAG |
+| **Generation** | Context → LLM → response | Self-RAG (quality loop) or Speculative RAG (draft → verify) |
+| **DI registration** | Inline `new` / manual wiring | `AddRetrievalPipeline().UseX()` / `AddIngestionPipeline().UseX()` |
+| **Pipeline composition** | Not applicable — no pipeline concept | Fluent builders with per-processor `Action<TOptions>` callbacks |
+| **Configuration** | N/A | Compile-time composition via fluent API (not runtime config) |
+| **PDF processing** | MarkItDown MCP or basic PdfPig | Vision-AI via PdfPig (VisionOcrEnricher + VisionTableEnricher) |
 
-The validation app caught what would have been an invisible quality problem in production — chunks that *look* like they're there but contain no useful content.
+## The Three-Repo Ecosystem
+
+This project is part of a three-repo architecture:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  dotnet/extensions fork (feature/retrieval-abstractions)    │
+│  Adds: RetrievalPipeline, RetrievalQuery, RetrievalChunk,  │
+│        RetrievalQueryProcessor, RetrievalResultProcessor    │
+│  Packages: Microsoft.Extensions.DataIngestion 10.5.1-dev    │
+└──────────────────────────┬──────────────────────────────────┘
+                           │ NuGet (local-packages/)
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│  MEDIExtensions (library)                                   │
+│  Concrete processors: MultiQueryExpander, LlmReranker,      │
+│    CragValidator, TreeSearchRetriever, EntityExtraction...   │
+│  Fluent builders: AddRetrievalPipeline(), AddIngestion...    │
+│  Package: MEDIExtensions 1.0.0-dev                          │
+└──────────────────────────┬──────────────────────────────────┘
+                           │ NuGet (local-packages/)
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│  AdvancedRag (this repo — reference application)            │
+│  Blazor Server + Aspire + Qdrant + Azure OpenAI             │
+│  Demonstrates: pipeline composition, RAPTOR, CRAG, Self-RAG │
+└─────────────────────────────────────────────────────────────┘
+```
+
+Each repo produces local NuGet packages consumed by the next. No cross-repo `ProjectReference` — each repo is self-contained and independently buildable.
 
 ## Trade-offs and Honest Assessment
 
-This approach is powerful, but it's not free:
-
 | Consideration | Assessment |
 |---------------|-----------|
-| **Cost** | Every page hits the vision LLM for OCR, plus embedding and enrichment calls. For a 12-page PDF, that's ~15+ LLM round-trips during ingestion. Cost per page is dropping fast, but it's real. |
-| **Latency** | Ingestion takes seconds per page, not milliseconds. But this is a *one-time ingestion cost* — queries against the vector store are still fast. |
-| **Flexibility** | This sample is Azure OpenAI-only. The template supported 5+ providers. However, the `IChatClient` / `IEmbeddingGenerator` abstractions mean adding providers back is straightforward. |
-| **Maturity** | PdfPig's DataIngestion packages are unpublished (local NuGet packages). This is exploratory — a proof of direction, not a production-hardened solution. |
+| **Latency** | Every processor adds an LLM round-trip. Query expansion + reranking + CRAG = 3 additional calls per query. For interactive chat, this adds 2-5 seconds. Ingestion processors are one-time cost. |
+| **Cost** | More LLM calls = more tokens = more cost. Tree indexing and hypothetical query generation are especially token-heavy during ingestion. But ingestion is amortized across all queries. |
+| **Complexity** | More moving parts. The fluent builder pattern manages this well — each `.UseX()` is independently understandable — but debugging a 6-processor pipeline requires observability (OpenTelemetry traces are built in). |
+| **Diminishing returns** | Not every corpus needs every processor. Topic classification on a single-topic corpus is wasted. CRAG on high-quality curated content adds latency without value. The composable design lets you measure and remove what doesn't help. |
 
-Why the trade-offs are worth it: **scanned documents are the majority of enterprise PDFs**. An RAG app that can't handle scanned content is an RAG app that can't handle reality. The cost of vision-AI processing is a fraction of the cost of bad answers from empty chunks.
+**Why the trade-offs are worth it:** Enterprise RAG applications live or die on answer quality. A wrong answer that the user trusts is worse than a slow answer that's correct. Every processor in this pipeline exists to push the quality needle — and the composable design means you only pay for what you use.
 
 ## Getting Started
 
@@ -185,22 +252,25 @@ dotnet user-secrets set "AzureOpenAI:ResourceGroup" "<your-resource-group>"
 dotnet run --project AdvancedRag.AppHost
 ```
 
-### Validate the Pipeline
+### Validate the Pipelines
 
-The repo includes a standalone validation app that tests each pipeline stage:
+The repo includes standalone validation apps for testing each pipeline stage:
 
 ```bash
+# Test ingestion pipeline stages
 dotnet run ValidateIngestion.cs
-```
 
-This runs 4 stages (PDF reading → Vision OCR → Semantic chunking → Contextual enrichment) and reports pass/fail for each.
+# Test retrieval pipeline: baseline vs. enhanced
+dotnet run ValidateRetrieval.cs
+```
 
 ## What's Next
 
-- **Package publication**: When PdfPig's DataIngestion packages ship to NuGet, the `local-packages` workaround goes away
-- **Hybrid mode**: Use native text extraction when available, vision only for scanned pages — reducing cost without sacrificing quality
-- **Multi-model support**: Test with other vision-capable providers (Anthropic Claude, Google Gemini) via the `IChatClient` abstraction
-- **Benchmarking**: Systematic comparison of extraction quality and retrieval accuracy across document types (scanned, digital, mixed, forms)
-- **Streaming ingestion**: Process documents as they arrive rather than batch-loading at startup
+- **Benchmarking**: Systematic A/B comparison of retrieval accuracy across configurations using the MEAI Evaluation framework
+- **Streaming generation**: Self-RAG with streaming output and in-band quality signals
+- **Cross-encoder reranking**: ONNX-based local reranking (no LLM round-trip) via MEDIExtensions.Onnx
+- **Hybrid search**: Combine vector similarity with BM25 keyword search for better recall on specific terms
+- **Adaptive pipeline selection**: Runtime profiling to auto-select the optimal processor combination per query
+- **Package publication**: When the upstream fork abstractions merge and MEDIExtensions ships to NuGet, the `local-packages` workaround goes away
 
-The core premise is simple: **vision models are getting cheaper and better, while the complexity of real-world documents isn't going away.** Building document processing pipelines that leverage vision-AI — through composable, framework-native patterns — positions .NET RAG applications to handle the documents that actually matter.
+The core premise: **RAG quality is a pipeline problem, not a model problem.** Better models help, but composable pre-processing, post-processing, and quality feedback loops are what turn a demo into a production system. Building these as `.UseX()` middleware — familiar to any .NET developer — makes advanced RAG accessible without a PhD in information retrieval.

@@ -1,130 +1,71 @@
 # Advanced RAG Reference Application
 
-A .NET reference application demonstrating advanced RAG (Retrieval-Augmented Generation) patterns with [MEDIExtensions](../MEDIExtensions/). Forked from the [AI Chat Template](https://github.com/dotnet/extensions) and extended with configuration-driven retrieval pipeline, ingestion enrichers, and generation orchestrators.
+A .NET reference application demonstrating advanced RAG (Retrieval-Augmented Generation) patterns built on composable pipeline APIs from [MEDIExtensions](../MEDIExtensions/). Forked from the [AI Chat Template](https://github.com/dotnet/extensions) and extended with fluent retrieval and ingestion pipelines, RAPTOR tree indexing, LLM reranking, CRAG quality gates, and generation orchestrators.
+
+See [docs/architecture-comparison.md](docs/architecture-comparison.md) for a deep dive on what this project innovates over the base template.
 
 ## What This Demonstrates
 
-Every advanced RAG pattern is selectable via `appsettings.json` — no code changes:
+Composable RAG pipelines configured via fluent builder APIs — the same pattern as `AddChatClient().UseFunctionInvocation()`:
 
-| Feature | Options | Default |
-|---------|---------|---------|
-| Query strategy | `None`, `QueryExpansion`, `HyDE` | None |
-| Reranker | `None`, `Llm`, `CrossEncoder` | None |
-| CRAG quality gate | `true`, `false` | false |
-| Generation mode | `Standard`, `SelfRag`, `SpeculativeRag` | Standard |
-| Search paradigm | `Vector`, `TreeTraversal`, `Adaptive` | Vector |
-| Entity extraction | `true`, `false` | true |
-| Topic classification | `true`, `false` | true |
-| Hypothetical queries | `true`, `false` | false |
-| Tree index | `true`, `false` | false |
+```csharp
+// Ingestion: vision OCR + enrichment + RAPTOR tree indexing
+builder.Services.AddIngestionPipeline()
+    .UseDocumentProcessor<VisionOcrEnricher>()
+    .UseDocumentProcessor<VisionTableEnricher>()
+    .UseChunkProcessor<ContextualChunkEnricher>()
+    .UseEntityExtraction()
+    .UseTopicClassification(o => o.Taxonomy = ["web", "data", "security", ...])
+    .UseHypotheticalQueries()
+    .UseTreeIndex();
 
-## Configuration
-
-```json
-{
-  "Retrieval": {
-    "QueryStrategy": "None",
-    "Reranker": "None",
-    "EnableCrag": false,
-    "GenerationMode": "Standard",
-    "SearchParadigm": "Vector",
-    "DrafterModel": "chat"
-  },
-  "Ingestion": {
-    "EnableEntityExtraction": true,
-    "EnableTopicClassification": true,
-    "EnableHypotheticalQueries": false,
-    "EnableTreeIndex": false,
-    "TopicTaxonomy": ["web", "data", "performance", "security", "architecture", "testing", "cloud", "ai"]
-  }
-}
+// Retrieval: query expansion + tree search + reranking + quality gate
+builder.Services.AddRetrievalPipeline()
+    .UseQueryExpansion()
+    .UseTreeSearch()
+    .UseLlmReranking()
+    .UseCrag();
 ```
+
+Every `.UseX()` is optional, has per-processor options, and chains in execution order.
+
+| Stage | Processors | Purpose |
+|-------|-----------|---------|
+| **Ingestion — Documents** | VisionOcrEnricher, VisionTableEnricher | Vision-AI PDF processing (PdfPig) |
+| **Ingestion — Chunks** | ContextualChunkEnricher, EntityExtraction, TopicClassification, HypotheticalQueries, TreeIndex | Semantic enrichment + RAPTOR hierarchy |
+| **Retrieval — Query** | QueryExpansion, TreeSearch, HyDE, AdaptiveRouting | Multi-query + level-aware search |
+| **Retrieval — Results** | LlmReranking, CRAG | Quality scoring + corrective gate |
+| **Generation** | SelfRagOrchestrator, SpeculativeRagOrchestrator | Quality feedback loops |
 
 ## Architecture
 
 ```
 AdvancedRag.AppHost          ← Aspire orchestrator (Azure OpenAI + Qdrant)
 AdvancedRag.ServiceDefaults  ← OpenTelemetry, health checks, service discovery
-AdvancedRag.Web              ← Blazor Server chat UI + RAG pipeline
-  ├─ Program.cs              ← DI registration (configurable processors from settings)
+AdvancedRag.Web              ← Blazor Server chat UI + RAG pipelines
+  ├─ Program.cs              ← Fluent pipeline composition
   ├─ Services/
-  │   ├─ SemanticSearch.cs   ← Uses RetrievalPipeline instead of raw vector search
-  │   ├─ IngestedChunk.cs    ← Extended with entity, topic, tree metadata fields
+  │   ├─ SemanticSearch.cs   ← Uses RetrievalPipeline (not raw vector search)
+  │   ├─ IngestedChunk.cs    ← Extended with entity, topic, tree metadata
   │   └─ Ingestion/
-  │       ├─ DataIngestor.cs ← MEDI pipeline + configurable enrichers
+  │       ├─ DataIngestor.cs ← Uses IngestionPipelineBuilder<string>.Build()
   │       └─ DocumentReader.cs ← PDF (PdfPig vision) + Markdown
   └─ Components/             ← Blazor chat UI
 ```
 
-## Key Patterns
-
-### Configurable Retrieval Pipeline (Program.cs)
-
-The retrieval pipeline is assembled from `appsettings.json` at startup:
-
-```csharp
-var pipeline = new RetrievalPipeline(loggerFactory: loggerFactory);
-
-// Pre-search processor (pick one)
-if (queryStrategy == "QueryExpansion")
-    pipeline.QueryProcessors.Add(new MultiQueryExpander(chatClient));
-else if (queryStrategy == "HyDE")
-    pipeline.QueryProcessors.Add(new HydeQueryTransformer(chatClient));
-
-// Post-search: reranker + quality gate
-if (reranker == "Llm")
-    pipeline.ResultProcessors.Add(new LlmReranker(chatClient));
-if (enableCrag)
-    pipeline.ResultProcessors.Add(new CragValidator(chatClient));
-```
-
-### Speculative RAG with Keyed DI
-
-Uses .NET's keyed DI for multi-model management — a drafter (small/fast) and verifier (large/accurate):
-
-```csharp
-openai.AddKeyedChatClient("drafter", config["DrafterModel"]);
-builder.Services.AddSingleton(sp =>
-{
-    var drafter = sp.GetRequiredKeyedService<IChatClient>("drafter");
-    var verifier = sp.GetRequiredService<IChatClient>();
-    return new SpeculativeRagOrchestrator(drafter, verifier);
-});
-```
-
-### Ingestion Enrichers (DataIngestor.cs)
-
-MEDI `ChunkProcessors` are added conditionally from config:
-
-```csharp
-if (ingestionConfig.GetValue<bool>("EnableEntityExtraction"))
-    pipeline.ChunkProcessors.Add(new EntityExtractionProcessor(chatClient));
-
-if (ingestionConfig.GetValue<bool>("EnableTopicClassification"))
-    pipeline.ChunkProcessors.Add(new TopicClassificationProcessor(chatClient, taxonomy));
-```
-
-## Evaluation
-
-`ValidateRetrieval.cs` is a standalone MEAI Evaluation A/B comparison tool:
-
-```bash
-dotnet run ValidateRetrieval.cs
-```
-
-Compares baseline (raw vector search) vs enhanced (with query expansion, reranking, CRAG) using `RelevanceTruthAndCompletenessEvaluator`.
-
 ## Prerequisites
 
-- [.NET 10 SDK](https://dot.net)
-- [Docker Desktop](https://www.docker.com/) (for Qdrant and optionally Ollama)
-- Azure OpenAI resource (or Ollama for local development)
+- [.NET 10 SDK](https://dotnet.microsoft.com/download)
+- [Docker Desktop](https://www.docker.com/) (for Qdrant vector store)
+- Azure OpenAI resource with a vision-capable chat model and an embedding model
 
 ## Running
 
 1. Configure Azure OpenAI credentials in AppHost user secrets:
    ```bash
    cd AdvancedRag.AppHost
+   dotnet user-secrets set "Azure:SubscriptionId" "<your-subscription-id>"
+   dotnet user-secrets set "Azure:Location" "<your-location>"
    dotnet user-secrets set "AzureOpenAI:Name" "<resource-name>"
    dotnet user-secrets set "AzureOpenAI:ResourceGroup" "<resource-group>"
    ```
@@ -134,17 +75,26 @@ Compares baseline (raw vector search) vs enhanced (with query expansion, reranki
    dotnet run --project AdvancedRag.AppHost
    ```
 
-3. Experiment with patterns by editing `AdvancedRag.Web/appsettings.json`.
+## Validation
+
+```bash
+# Test ingestion pipeline stages
+dotnet run ValidateIngestion.cs
+
+# Compare baseline vs. enhanced retrieval
+dotnet run ValidateRetrieval.cs
+```
 
 ## Dependencies
 
-- [MEDIExtensions](../MEDIExtensions/) — Retrieval + ingestion processors (project reference)
-- [MEDI](https://www.nuget.org/packages/Microsoft.Extensions.DataIngestion) — Ingestion pipeline
-- [PdfPig.DataIngestion](https://www.nuget.org/packages/UglyToad.PdfPig.DataIngestion) — PDF → vision OCR
-- [Aspire](https://learn.microsoft.com/dotnet/aspire/) — Orchestration, service discovery, OTel
+- [MEDIExtensions](../MEDIExtensions/) — Fluent builders + retrieval/ingestion processors (NuGet: `1.0.0-dev`)
+- [dotnet/extensions fork](../extensions/) — Retrieval pipeline abstractions (NuGet: `10.5.1-dev`)
+- [UglyToad.PdfPig.DataIngestion](https://www.nuget.org/packages/UglyToad.PdfPig.DataIngestion) — Vision-AI PDF processing
+- [Aspire](https://learn.microsoft.com/dotnet/aspire/) — Orchestration, service discovery, OpenTelemetry
 - [Qdrant](https://qdrant.tech/) — Vector store
 
 ## Related
 
-- [MEDIExtensions](../MEDIExtensions/) — The library this app consumes
+- [docs/architecture-comparison.md](docs/architecture-comparison.md) — Deep dive: what this innovates over the template
+- [MEDIExtensions](../MEDIExtensions/) — The library providing pipeline builders and processors
 - [medi-advanced-rag-investigation](../medi-advanced-rag-investigation/) — Research that produced these patterns
