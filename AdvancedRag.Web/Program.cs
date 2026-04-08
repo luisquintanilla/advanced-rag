@@ -36,6 +36,7 @@ builder.Services.AddIngestionPipeline()
 // Retrieval pipeline — compose query and result processors
 builder.Services.AddRetrievalPipeline()
     .UseQueryExpansion()
+    .UseTreeSearch()
     .UseLlmReranking()
     .UseCrag();
 
