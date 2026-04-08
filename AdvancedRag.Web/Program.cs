@@ -1,4 +1,5 @@
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DataIngestion;
 using MEDIExtensions.Retrieval;
 using AdvancedRag.Web.Components;
 using AdvancedRag.Web.Services;
