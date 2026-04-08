@@ -1,23 +1,27 @@
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DataIngestion;
 using Microsoft.Extensions.DataIngestion.Chunkers;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.VectorData;
 using Microsoft.ML.Tokenizers;
 using MEDIExtensions.Ingestion;
 using UglyToad.PdfPig.DataIngestion.Processors;
+using AdvancedRag.Web.Services;
 
 namespace AdvancedRag.Web.Services.Ingestion;
 
 public class DataIngestor(
     ILogger<DataIngestor> logger,
     ILoggerFactory loggerFactory,
-    IConfiguration configuration,
+    IOptions<IngestionOptions> ingestionOptions,
     VectorStore vectorStore,
     IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator,
     IChatClient chatClient)
 {
     public async Task IngestDataAsync(DirectoryInfo directory, string searchPattern)
     {
+        var options = ingestionOptions.Value;
+
         using var writer = new VectorStoreWriter<string>(vectorStore, dimensionCount: IngestedChunk.VectorDimensions, new()
         {
             CollectionName = IngestedChunk.CollectionName,
@@ -42,23 +46,16 @@ public class DataIngestor(
             }
         };
 
-        // Add configurable enrichment processors from appsettings.json
-        var ingestionConfig = configuration.GetSection("Ingestion");
-
-        if (ingestionConfig.GetValue<bool>("EnableEntityExtraction"))
+        if (options.EnableEntityExtraction)
             pipeline.ChunkProcessors.Add(new EntityExtractionProcessor(chatClient));
 
-        if (ingestionConfig.GetValue<bool>("EnableTopicClassification"))
-        {
-            var taxonomy = ingestionConfig.GetSection("TopicTaxonomy").Get<string[]>()
-                ?? ["web", "data", "performance", "security", "architecture"];
-            pipeline.ChunkProcessors.Add(new TopicClassificationProcessor(chatClient, taxonomy));
-        }
+        if (options.EnableTopicClassification)
+            pipeline.ChunkProcessors.Add(new TopicClassificationProcessor(chatClient, options.TopicTaxonomy));
 
-        if (ingestionConfig.GetValue<bool>("EnableHypotheticalQueries"))
+        if (options.EnableHypotheticalQueries)
             pipeline.ChunkProcessors.Add(new HypotheticalQueryProcessor(chatClient));
 
-        if (ingestionConfig.GetValue<bool>("EnableTreeIndex"))
+        if (options.EnableTreeIndex)
             pipeline.ChunkProcessors.Add(new TreeIndexProcessor(chatClient));
 
         await foreach (var result in pipeline.ProcessAsync(directory, searchPattern))
