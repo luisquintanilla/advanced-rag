@@ -1,5 +1,5 @@
 using AdvancedRag.Web.Services.Ingestion;
-using Microsoft.Extensions.DataIngestion;
+using Microsoft.Extensions.DataRetrieval;
 using Microsoft.Extensions.VectorData;
 
 namespace AdvancedRag.Web.Services;
